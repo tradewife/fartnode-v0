@@ -121,7 +121,7 @@ jobs:
           fi
           echo "has=true" >> "$GITHUB_OUTPUT"
           {
-            echo "manifests<<'EOF'"
+            echo "manifests<<EOF"
             echo "${manifests}"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
