@@ -1,0 +1,3 @@
+[submodule "vibesdk"]
+	path = vibesdk
+	url = https://github.com/tradewife/fartnode.git
