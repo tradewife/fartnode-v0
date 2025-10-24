@@ -1,0 +1,20 @@
+{
+  "name": "fartnode-workspace",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.15.1",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "lint": "echo \"(add eslint later)\"",
+    "typecheck": "tsc -b --pretty",
+    "test": "vitest run --reporter=basic || jest -w 1",
+    "build": "echo \"(noop for now)\""
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vitest": "^1.5.0"
+  }
+}
