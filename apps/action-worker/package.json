@@ -1,0 +1,23 @@
+{
+  "name": "@fartnode/action-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "lint": "echo \"(add eslint later)\""
+  },
+  "dependencies": {
+    "@fartnode/solana-core": "workspace:*",
+    "@solana/web3.js": "^1.95.3",
+    "hono": "^4.3.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240512.0",
+    "typescript": "^5.4.5",
+    "wrangler": "^3.49.0"
+  }
+}

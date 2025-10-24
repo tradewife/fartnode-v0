@@ -1,0 +1,6 @@
+name = "fartnode-action-worker"
+main = "dist/worker.js"
+compatibility_date = "2025-10-01"
+
+[vars]
+SOLANA_RPC_URL = "https://api.devnet.solana.com"
