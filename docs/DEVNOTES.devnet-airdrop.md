@@ -28,12 +28,12 @@ curl -s -X POST http://127.0.0.1:8787/api/solana/devnet-airdrop \
 
 - Worker pulls `SOLANA_RPC_URL` from environment (defaults to `https://api.devnet.solana.com`) and issues a best-effort `requestAirdrop`.
 - Response payload always sets `simulateFirst: true`; clients should call `simulateTransaction` before submit.
-- Placeholder transaction contains compute budget + priority fee instructions and a no-op transfer so wallets can display intent.
+- Placeholder transaction contains compute budget + priority fee instructions plus a memo (`"FARTNODE demo"`) so wallets can display intent.
 - Rate limiting and idempotency fall back to in-memory stubs until Durable Objects / KV bindings are configured.
 
 ## Simulate-First Checklist
 1. Fetch metadata and honour the default limits (`amountSol <= 5`) before composing the request.
-2. Run the POST endpoint, capture the returned `transactionBase64`, and simulate client-side.
+2. Run the POST endpoint, capture the returned `transaction` (base64), and simulate client-side.
 3. Cache the `blockhash` and `lastValidBlockHeight` from simulation; sign and broadcast before expiry.
 
 ## Troubleshooting with Solana CLI

@@ -16,6 +16,12 @@ const RATE_LIMIT_WINDOW_MS = 3_000;
 const rateLimitCache = new Map<string, number>();
 const memoryIdempotency = new Map<string, ComposeResult>();
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type,Idempotency-Key"
+} as const;
+
 const allowRequest = (identifier: string): boolean => {
   const now = Date.now();
   const last = rateLimitCache.get(identifier) ?? 0;
@@ -61,7 +67,18 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 app.onError((err, c) => {
   console.error("Unhandled worker error", err);
-  return c.json({ error: "Internal Server Error" }, 500);
+  return c.json({ error: "Internal Server Error" }, 500, CORS_HEADERS);
+});
+
+app.use("*", async (c, next) => {
+  await next();
+  for (const [name, value] of Object.entries(CORS_HEADERS)) {
+    c.res.headers.set(name, value);
+  }
+});
+
+app.options("*", (c) => {
+  return c.body(null, 204, CORS_HEADERS);
 });
 
 app.get("/api/solana/devnet-airdrop", (c) => {

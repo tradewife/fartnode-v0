@@ -11,7 +11,9 @@
     "lint": "echo \"(add eslint later)\"",
     "typecheck": "tsc -b --pretty",
     "test": "vitest run --reporter=basic || jest -w 1",
-    "build": "echo \"(noop for now)\""
+    "build": "pnpm -r run build",
+    "dev:web": "pnpm -C apps/web dev",
+    "dev:worker": "pnpm -C apps/action-worker dev"
   },
   "devDependencies": {
     "typescript": "^5.4.5",
