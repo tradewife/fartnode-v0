@@ -3,10 +3,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: [
-      "packages/**/*.test.ts",
-      "packages/**/__tests__/**/*.test.ts",
-      "apps/**/*.test.ts",
-      "apps/**/__tests__/**/*.test.ts"
+      "packages/**/*.{test,spec}.{ts,tsx}",
+      "packages/**/__tests__/**/*.{test,spec}.{ts,tsx}",
+      "apps/**/*.{test,spec}.{ts,tsx}",
+      "apps/**/__tests__/**/*.{test,spec}.{ts,tsx}"
     ],
     exclude: ["**/node_modules/**", "vibesdk/**"]
   }

@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly ACTION_WORKER_URL?: string;
+  readonly VITE_ACTION_WORKER_URL?: string;
 }
 
 interface ImportMeta {

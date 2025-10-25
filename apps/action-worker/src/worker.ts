@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import type { ComposeResult } from "@fartnode/solana-core";
 
 import {
@@ -10,6 +11,13 @@ type Bindings = {
   SOLANA_RPC_URL?: string;
   IDEMPOTENCY_KV?: KVNamespace;
 };
+
+type WorkerContext = Context<{ Bindings: Bindings }>;
+
+const ACTION_ENDPOINTS = [
+  "/api/solana/devnet-airdrop",
+  "/api/solana/actions/devnet-airdrop"
+] as const;
 
 const IDEMPOTENCY_TTL = 60 * 60; // seconds
 const RATE_LIMIT_WINDOW_MS = 3_000;
@@ -77,15 +85,7 @@ app.use("*", async (c, next) => {
   }
 });
 
-app.options("*", (c) => {
-  return c.body(null, 204, CORS_HEADERS);
-});
-
-app.get("/api/solana/devnet-airdrop", (c) => {
-  return c.json(getDevnetAirdropMetadata());
-});
-
-app.post("/api/solana/devnet-airdrop", async (c) => {
+const handleComposeRequest = async (c: WorkerContext) => {
   const clientId = c.req.header("CF-Connecting-IP") ?? "anonymous";
   if (!allowRequest(clientId)) {
     return c.json({ error: "Rate limit exceeded" }, 429);
@@ -125,6 +125,16 @@ app.post("/api/solana/devnet-airdrop", async (c) => {
     console.warn("Devnet airdrop composition failed", error);
     return c.json({ error: (error as Error).message ?? "Unknown error" }, 400);
   }
-});
+};
+
+const handleMetadataRequest = (c: WorkerContext) => {
+  return c.json(getDevnetAirdropMetadata());
+};
+
+for (const path of ACTION_ENDPOINTS) {
+  app.options(path, (c) => c.body(null, 204, CORS_HEADERS));
+  app.get(path, handleMetadataRequest);
+  app.post(path, handleComposeRequest);
+}
 
 export default app;
