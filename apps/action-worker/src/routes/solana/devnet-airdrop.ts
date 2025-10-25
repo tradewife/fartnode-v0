@@ -1,19 +1,47 @@
 import {
-  ActionInput,
-  ActionMetadata,
-  ComposeResult,
-  buildVersionedTx,
+  type ActionInput,
+  type ActionMetadata,
+  type ComposeResult,
+  buildVersionedTransaction,
   getConnection,
+  serializeTransactionBase64,
   simulateFirst,
   withComputeBudget,
   withPriorityFee
 } from "@fartnode/solana-core";
 import {
+  Connection,
   LAMPORTS_PER_SOL,
   PublicKey,
-  SystemProgram,
+  TransactionInstruction,
   VersionedTransaction
 } from "@solana/web3.js";
+
+const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+const MEMO_TEXT = "FARTNODE demo";
+
+const memoEncoder = new TextEncoder();
+
+const toInstructionData = (memo: string): Uint8Array | unknown => {
+  const bytes = memoEncoder.encode(memo);
+  const maybeBuffer = (globalThis as typeof globalThis & {
+    Buffer?: { from(input: Uint8Array): unknown };
+  }).Buffer;
+
+  if (maybeBuffer) {
+    return maybeBuffer.from(bytes);
+  }
+
+  return bytes;
+};
+
+const createMemoInstruction = (signer: PublicKey, memo: string): TransactionInstruction => {
+  return new TransactionInstruction({
+    keys: [{ pubkey: signer, isSigner: true, isWritable: false }],
+    programId: MEMO_PROGRAM_ID,
+    data: toInstructionData(memo)
+  } as any);
+};
 
 const MAX_AIRDROP_SOL = 5;
 const DEFAULT_AIRDROP_SOL = 1;
@@ -25,26 +53,6 @@ const metadata: ActionMetadata = {
     { name: "publicKey", type: "string", required: true },
     { name: "amountSol", type: "number", required: false, default: 1 }
   ]
-};
-
-const encodeBase64 = (data: Uint8Array): string => {
-  if (typeof globalThis.btoa === "function") {
-    let binary = "";
-    data.forEach((byte) => {
-      binary += String.fromCharCode(byte);
-    });
-    return globalThis.btoa(binary);
-  }
-
-  const maybeBuffer = (globalThis as {
-    Buffer?: { from(data: Uint8Array): { toString(encoding: "base64"): string } };
-  }).Buffer;
-
-  if (maybeBuffer) {
-    return maybeBuffer.from(data).toString("base64");
-  }
-
-  throw new Error("No base64 encoder available");
 };
 
 const ensureValidInput = (input: ActionInput): { recipient: PublicKey; amountSol: number } => {
@@ -78,18 +86,14 @@ const composePlaceholderTransaction = async (
   blockhash: string
 ): Promise<VersionedTransaction> => {
   const instructions = [
-    withComputeBudget(),
+    ...withComputeBudget(),
     withPriorityFee(),
-    SystemProgram.transfer({
-      fromPubkey: recipient,
-      toPubkey: recipient,
-      lamports: 0
-    })
+    createMemoInstruction(recipient, MEMO_TEXT)
   ];
 
-  return buildVersionedTx({
+  return buildVersionedTransaction({
     payer: recipient,
-    ixs: instructions,
+    instructions,
     blockhash
   });
 };
@@ -99,18 +103,21 @@ export const getDevnetAirdropMetadata = (): ActionMetadata => metadata;
 type ComposeParams = {
   rpcUrl?: string;
   input: ActionInput;
+  connection?: Connection;
 };
 
 export const composeDevnetAirdrop = async ({
   rpcUrl,
-  input
+  input,
+  connection: maybeConnection
 }: ComposeParams): Promise<ComposeResult> => {
   const { recipient, amountSol } = ensureValidInput(input);
-  const connection = getConnection(rpcUrl);
+  const connection = maybeConnection ?? getConnection(rpcUrl);
 
   // Best-effort request to seed the wallet with SOL on devnet.
   try {
-    await connection.requestAirdrop(recipient, amountSol * LAMPORTS_PER_SOL);
+    const lamports = Math.round(amountSol * LAMPORTS_PER_SOL);
+    await connection.requestAirdrop(recipient, lamports);
   } catch (error) {
     console.warn("Devnet airdrop request failed", error);
   }
@@ -118,17 +125,19 @@ export const composeDevnetAirdrop = async ({
   const { blockhash } = await connection.getLatestBlockhash();
   const tx = await composePlaceholderTransaction(recipient, blockhash);
 
+  let simulationLogs: string[] | undefined;
   try {
-    await simulateFirst(connection, tx);
+    const simulation = await simulateFirst(connection, tx);
+    simulationLogs = simulation.logs;
   } catch (error) {
     console.warn("Simulation failed (continuing with simulateFirst=true)", error);
   }
 
-  const serialized = tx.serialize();
-
   return {
-    transactionBase64: encodeBase64(serialized),
+    transaction: serializeTransactionBase64(tx),
     network: "devnet",
-    simulateFirst: true
+    simulateFirst: true,
+    message: "Simulate before signing in your wallet.",
+    simulationLogs
   };
 };

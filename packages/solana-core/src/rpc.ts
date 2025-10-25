@@ -1,4 +1,4 @@
-import { Connection } from "@solana/web3.js";
+import { type Commitment, Connection } from "@solana/web3.js";
 
 const DEFAULT_SOLANA_RPC_URL = "https://api.devnet.solana.com";
 
@@ -9,12 +9,22 @@ const getProcessEnv = (): NodeJS.ProcessEnv | undefined => {
   return undefined;
 };
 
-const resolveEndpoint = (override?: string): string => {
+export type RpcEnvironment = Record<string, string | undefined>;
+
+export type ConnectionConfig = {
+  endpointOverride?: string;
+  commitment?: Commitment;
+  env?: RpcEnvironment;
+};
+
+export const resolveEndpoint = (
+  override?: string,
+  env: RpcEnvironment | undefined = getProcessEnv()
+): string => {
   if (override && override.length > 0) {
     return override;
   }
 
-  const env = getProcessEnv();
   if (env?.SOLANA_RPC_URL && env.SOLANA_RPC_URL.length > 0) {
     return env.SOLANA_RPC_URL;
   }
@@ -22,9 +32,20 @@ const resolveEndpoint = (override?: string): string => {
   return DEFAULT_SOLANA_RPC_URL;
 };
 
-export const getConnection = (endpointOverride?: string): Connection => {
-  const endpoint = resolveEndpoint(endpointOverride);
-  return new Connection(endpoint, "confirmed");
+export const createConnection = (
+  endpoint: string,
+  commitment: Commitment = "confirmed"
+): Connection => new Connection(endpoint, commitment);
+
+export const getConnectionFromEnv = (config: ConnectionConfig = {}): Connection => {
+  const endpoint = resolveEndpoint(config.endpointOverride, config.env);
+  return createConnection(endpoint, config.commitment ?? "confirmed");
 };
 
-export const getRpcEndpoint = (endpointOverride?: string): string => resolveEndpoint(endpointOverride);
+export const getConnection = (
+  endpointOverride?: string,
+  commitment: Commitment = "confirmed"
+): Connection => getConnectionFromEnv({ endpointOverride, commitment });
+
+export const getRpcEndpoint = (endpointOverride?: string): string =>
+  resolveEndpoint(endpointOverride);

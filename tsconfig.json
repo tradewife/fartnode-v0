@@ -6,6 +6,9 @@
     },
     {
       "path": "./apps/action-worker"
+    },
+    {
+      "path": "./apps/web"
     }
   ]
 }

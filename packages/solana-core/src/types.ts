@@ -1,8 +1,3 @@
-export type ActionInput = {
-  publicKey: string;
-  amountSol?: number;
-};
-
 export type ActionMetadata = {
   title: string;
   description: string;
@@ -15,8 +10,27 @@ export type ActionMetadata = {
   }>;
 };
 
+export type ComposeInput = {
+  publicKey: string;
+  amountSol?: number;
+};
+
 export type ComposeResult = {
-  transactionBase64: string;
+  transaction: string;
   network: "devnet" | "testnet";
   simulateFirst: true;
+  message?: string;
+  simulationLogs?: string[];
 };
+
+export type PriorityFeeConfig = {
+  microLamports?: number;
+  defaultMicroLamports?: number;
+};
+
+export type ComputeBudgetConfig = {
+  units?: number;
+  microLamports?: number;
+};
+
+export type ActionInput = ComposeInput;
