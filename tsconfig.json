@@ -5,6 +5,9 @@
       "path": "./packages/solana-core"
     },
     {
+      "path": "./packages/monetize-solana"
+    },
+    {
       "path": "./apps/action-worker"
     },
     {
