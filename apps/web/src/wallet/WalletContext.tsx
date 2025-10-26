@@ -16,15 +16,16 @@ type WalletProvidersProps = {
 const DEVNET_ENDPOINT = clusterApiUrl(WalletAdapterNetwork.Devnet);
 
 export const WalletProviders = ({ children }: WalletProvidersProps): JSX.Element => {
+  const isBrowser = typeof window !== "undefined";
+
   const wallets = useMemo(
-    () => {
-      if (typeof window === "undefined") {
-        return [];
-      }
-      return [new PhantomWalletAdapter(), new SolflareWalletAdapter()];
-    },
-    []
+    () => (isBrowser ? [new PhantomWalletAdapter(), new SolflareWalletAdapter()] : []),
+    [isBrowser]
   );
+
+  if (!isBrowser) {
+    return <>{children}</>;
+  }
 
   return (
     <ConnectionProvider endpoint={DEVNET_ENDPOINT}>

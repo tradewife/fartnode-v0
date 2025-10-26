@@ -26,24 +26,24 @@ export type DevnetAirdropResponse = {
 
 type FetchLike = typeof fetch;
 
-const ACTION_PATH = "/api/solana/devnet-airdrop";
+const ACTION_PATH = "/api/solana/actions/devnet-airdrop";
 
 const normalizeBaseUrl = (url: string): string => url.replace(/\/+$/, "");
 
 export const createActionsClient = (
-  baseUrl: string | undefined,
+  baseUrl: string | undefined = import.meta.env.VITE_ACTION_WORKER_URL,
   fetchImpl: FetchLike = fetch
 ) => {
   const resolveBaseUrl = (): string => {
-    const resolved = baseUrl ?? import.meta.env.ACTION_WORKER_URL;
+    const resolved = baseUrl;
     if (!resolved) {
-      throw new Error("ACTION_WORKER_URL is not configured");
+      throw new Error("VITE_ACTION_WORKER_URL is not configured");
     }
     try {
       const parsed = new URL(resolved);
       return normalizeBaseUrl(parsed.toString());
     } catch {
-      throw new Error("ACTION_WORKER_URL must be a valid URL");
+      throw new Error("VITE_ACTION_WORKER_URL must be a valid URL");
     }
   };
 
@@ -108,7 +108,7 @@ export const createActionsClient = (
   };
 };
 
-const defaultClient = createActionsClient(undefined);
+const defaultClient = createActionsClient();
 
 export const getDevnetAirdropMetadata = (): Promise<ActionMetadata> =>
   defaultClient.getMetadata();

@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { createActionsClient } from "./actionsClient";
 
 const BASE_URL = "https://worker.example";
-const ENDPOINT = `${BASE_URL}/api/solana/devnet-airdrop`;
+const ENDPOINT = `${BASE_URL}/api/solana/actions/devnet-airdrop`;
 
 const createResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -69,5 +69,11 @@ describe("actionsClient", () => {
     await expect(
       client.composeTransaction({ publicKey: "ExamplePublicKey" })
     ).rejects.toThrow("nope");
+  });
+
+  it("builds the endpoint using the provided base url", () => {
+    const client = createActionsClient(`${BASE_URL}/`);
+
+    expect(client.getEndpoint()).toBe(ENDPOINT);
   });
 });

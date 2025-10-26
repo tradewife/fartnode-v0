@@ -33,3 +33,14 @@ FARTNODE closes that gap. We empower every builder, artist, and dev with **insti
 pnpm -C apps/action-worker dev
 pnpm -C apps/web dev
 # connect your Phantom wallet
+```
+
+## Optional Monetization Kit
+
+FARTNODE ships an opt-in Solana monetization toolkit for creators who want to charge for routes or MCP tools:
+
+- `packages/monetize-solana` — x402 helpers for Hono Workers and MCP servers.
+- `examples/solana-devnet-workers` — Cloudflare Worker showcasing paid Solana endpoints.
+- `examples/mcp-paid-tools` — Streamable HTTP MCP server with paid and free tools.
+
+See `docs/monetization.md` for setup guidance and facilitator details.

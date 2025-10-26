@@ -16,24 +16,11 @@ const ACTION_POST_COPY =
   "Share this endpoint with Blink surfaces. It composes a Devnet airdrop transaction.";
 
 const decodeTransaction = (serialized: string): VersionedTransaction => {
-  const maybeBuffer = (globalThis as Record<string, unknown>).Buffer as
-    | { from(input: string, encoding: string): Uint8Array }
-    | undefined;
-
-  if (maybeBuffer?.from) {
-    return VersionedTransaction.deserialize(maybeBuffer.from(serialized, "base64"));
-  }
-
   const atobImpl = globalThis.atob;
   if (!atobImpl) {
     throw new Error("Base64 decoding is not supported in this environment.");
   }
-
-  const binary = atobImpl(serialized);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
+  const bytes = Uint8Array.from(atobImpl(serialized), (char) => char.charCodeAt(0));
   return VersionedTransaction.deserialize(bytes);
 };
 
@@ -283,6 +270,11 @@ export const BlinkifyDemo = (): JSX.Element => {
       {composeResponse ? (
         <div style={{ marginBottom: "1.5rem" }}>
           <p style={{ marginTop: 0, color: "#475569" }}>{composeResponse.message}</p>
+          {composeResponse.simulateFirst ? (
+            <p style={{ marginTop: "0.5rem", color: "#0ea5e9" }}>
+              Simulation recommended — review the logs below before sending.
+            </p>
+          ) : null}
           <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
             <button
               type="button"

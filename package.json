@@ -12,6 +12,13 @@
     "typecheck": "tsc -b --pretty",
     "test": "vitest run --reporter=basic || jest -w 1",
     "build": "pnpm -r run build",
+    "build:monetize-solana": "pnpm -C packages/monetize-solana build",
+    "typecheck:monetize-solana": "pnpm -C packages/monetize-solana typecheck",
+    "test:monetize-solana": "pnpm -C packages/monetize-solana test",
+    "build:solana-devnet-worker": "pnpm -C examples/solana-devnet-workers build",
+    "typecheck:solana-devnet-worker": "pnpm -C examples/solana-devnet-workers typecheck",
+    "build:mcp-paid-tools": "pnpm -C examples/mcp-paid-tools build",
+    "typecheck:mcp-paid-tools": "pnpm -C examples/mcp-paid-tools typecheck",
     "dev:web": "pnpm -C apps/web dev",
     "dev:worker": "pnpm -C apps/action-worker dev"
   },

@@ -41,10 +41,10 @@ jobs:
         run: pnpm -w typecheck
 
       - name: Test
-        run: pnpm -w test
+        run: pnpm -w test && pnpm -C apps/web test
 
       - name: Build
-        run: pnpm -w build
+        run: pnpm -w build && pnpm -C apps/web build
 
   js:
     name: JS Quality

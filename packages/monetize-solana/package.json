@@ -1,0 +1,32 @@
+{
+  "name": "@fartnode/monetize-solana",
+  "version": "0.1.0",
+  "description": "Optional Solana monetization kit for FARTNODE routes and MCP tools.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --tsconfig tsconfig.build.json",
+    "typecheck": "tsc --project tsconfig.json --pretty",
+    "test": "vitest run --reporter=basic"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.2",
+    "hono": "^4.7.1",
+    "x402-hono": "^0.6.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

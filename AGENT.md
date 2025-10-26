@@ -165,6 +165,13 @@
 2. Add CPI example; compute budgeting; error mapping.  
 3. TS client with transaction builders + tests.
 
+### 5.6 x402 Monetization (Solana)
+1. Reach for `@fartnode/monetize-solana` to wrap Hono apps (`withFartnodeX402`) and MCP servers (`createPaidMcpServer`).
+2. Author `fartnode.x402.json` or set `SOL_RECIPIENT`, `X402_FACILITATOR_URL`, `X402_NETWORK` env vars (default facilitator is `https://x402.org/facilitator`).
+3. Map paid routes with "METHOD /path" keys; set `price` (string or Money object), `network` (`solana-devnet` or `solana`), and optional `config` metadata.
+4. For MCP tools, pass a `validatePayment` callback to confirm `X-PAYMENT` headers before invoking the handler; emit `McpError(402, ...)` when payment is missing.
+5. Keep kit **opt-in**: no monetization unless config + recipient are provided; mainnet requires `useCdp: true` and a CDP facilitator.
+
 ---
 
 ## 6) PR Policy & Templates
