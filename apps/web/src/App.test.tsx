@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import type { ReactNode } from "react";
 
@@ -38,16 +38,25 @@ vi.mock("./lib/actionsClient", () => ({
     label: "Transfer",
     links: { actions: [] }
   }),
-  composeTransferAction: vi.fn()
+  composeTransferAction: vi.fn(),
+  getBaseUrl: vi.fn().mockReturnValue("https://example.dev"),
+  postCompose: vi.fn().mockResolvedValue({
+    transaction: "",
+    simulationLogs: []
+  })
 }));
 
 import App from "./App";
 
 describe("App", () => {
-  it("renders the Blinkify UI with a connect wallet button", async () => {
+  it("defaults to the Vibe Studio tab and can switch to Blink demo", async () => {
     render(<App />);
 
-    expect(screen.getByText(/Fartnode Institutional Blink Demo/i)).toBeInTheDocument();
+    expect(screen.getByText(/Fartnode — Vibe Coding Studio/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /vibe studio/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /blink demo/i }));
+
     expect(await screen.findByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
   });
 });
