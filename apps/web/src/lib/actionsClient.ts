@@ -4,6 +4,7 @@ type FetchLike = typeof fetch;
 
 const TRANSFER_PATH = "/api/actions/transfer-sol";
 const SWAP_PATH = "/api/actions/swap";
+const DEFAULT_WORKER_BASE = "http://127.0.0.1:8787";
 
 export type TransferComposeResponse = ActionPostResponse & {
   type: "transaction";
@@ -17,6 +18,16 @@ export type SwapComposeResponse = TransferComposeResponse;
 
 const normalizeBaseUrl = (url: string): string => url.replace(/\/+$/, "");
 
+const computeBaseUrl = (value?: string): string => {
+  const candidate = value ?? import.meta.env?.VITE_ACTION_WORKER_URL ?? DEFAULT_WORKER_BASE;
+  try {
+    const parsed = new URL(candidate);
+    return normalizeBaseUrl(parsed.toString());
+  } catch {
+    throw new Error("VITE_ACTION_WORKER_URL must be a valid URL");
+  }
+};
+
 const parseJson = async <T>(response: Response): Promise<T> => {
   if (!response.ok) {
     const raw = await response.text();
@@ -25,20 +36,21 @@ const parseJson = async <T>(response: Response): Promise<T> => {
   return (await response.json()) as T;
 };
 
+export const getBaseUrl = (override?: string): string => computeBaseUrl(override);
+
+export type ComposerResponse = {
+  transaction: string;
+  simulateFirst?: boolean;
+  simulationLogs?: string[];
+  [key: string]: unknown;
+};
+
 export const createActionsClient = (
-  baseUrl: string | undefined = import.meta.env.VITE_ACTION_WORKER_URL,
+  baseUrl?: string,
   fetchImpl: FetchLike = fetch
 ) => {
   const resolveBaseUrl = (): string => {
-    if (!baseUrl) {
-      throw new Error("VITE_ACTION_WORKER_URL is not configured");
-    }
-    try {
-      const parsed = new URL(baseUrl);
-      return normalizeBaseUrl(parsed.toString());
-    } catch {
-      throw new Error("VITE_ACTION_WORKER_URL must be a valid URL");
-    }
+    return computeBaseUrl(baseUrl);
   };
 
   const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
@@ -101,3 +113,22 @@ export const composeSwapAction = (
 ): Promise<SwapComposeResponse> => defaultClient.composeSwap(payload);
 
 export const getSwapActionEndpoint = (): string => defaultClient.getSwapEndpoint();
+
+export const postCompose = async (
+  baseUrl: string,
+  endpoint: string,
+  payload: Record<string, unknown>,
+  fetchImpl: FetchLike = fetch
+): Promise<ComposerResponse> => {
+  const resolvedBase = computeBaseUrl(baseUrl);
+  const target = endpoint.startsWith("http") ? endpoint : `${resolvedBase}${endpoint}`;
+  const response = await fetchImpl(target, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  return parseJson<ComposerResponse>(response);
+};
