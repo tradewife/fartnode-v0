@@ -112,7 +112,7 @@ export const composeDevnetAirdrop = async ({
   connection: maybeConnection
 }: ComposeParams): Promise<ComposeResult> => {
   const { recipient, amountSol } = ensureValidInput(input);
-  const connection = maybeConnection ?? getConnection(rpcUrl);
+  const connection = maybeConnection ?? (await getConnection(rpcUrl, undefined, "send"));
 
   // Best-effort request to seed the wallet with SOL on devnet.
   try {

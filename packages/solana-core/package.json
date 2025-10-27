@@ -26,6 +26,7 @@
     "actions"
   ],
   "dependencies": {
+    "@solana/actions": "^1.6.6",
     "@solana/web3.js": "^1.95.3"
   },
   "devDependencies": {

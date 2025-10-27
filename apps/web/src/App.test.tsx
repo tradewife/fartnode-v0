@@ -28,15 +28,17 @@ vi.mock("@solana/wallet-adapter-react-ui", () => ({
 }));
 
 vi.mock("./lib/actionsClient", () => ({
-  getDevnetAirdropEndpoint: vi.fn().mockReturnValue(
-    "https://example.dev/api/solana/actions/devnet-airdrop"
+  getTransferActionEndpoint: vi.fn().mockReturnValue(
+    "https://example.dev/api/actions/transfer-sol"
   ),
-  getDevnetAirdropMetadata: vi.fn().mockResolvedValue({
-    title: "Devnet airdrop",
+  getTransferActionMetadata: vi.fn().mockResolvedValue({
+    title: "Transfer SOL",
     description: "Demo metadata",
-    inputs: []
+    icon: "https://example/icon.png",
+    label: "Transfer",
+    links: { actions: [] }
   }),
-  requestDevnetAirdrop: vi.fn()
+  composeTransferAction: vi.fn()
 }));
 
 import App from "./App";
@@ -45,7 +47,7 @@ describe("App", () => {
   it("renders the Blinkify UI with a connect wallet button", async () => {
     render(<App />);
 
-    expect(screen.getByText(/Fartnode Blinkify Demo/i)).toBeInTheDocument();
+    expect(screen.getByText(/Fartnode Institutional Blink Demo/i)).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /connect wallet/i })).toBeInTheDocument();
   });
 });

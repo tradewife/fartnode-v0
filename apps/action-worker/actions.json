@@ -1,0 +1,6 @@
+{
+  "rules": [
+    { "pathPattern": "/actions/transfer-sol", "apiPath": "/api/actions/transfer-sol" },
+    { "pathPattern": "/actions/swap", "apiPath": "/api/actions/swap" }
+  ]
+}

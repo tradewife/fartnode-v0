@@ -88,6 +88,6 @@ describe("solana-core", () => {
       commitment: "processed"
     });
     expect(result.logs).toEqual(["log 1", "log 2"]);
-    expect(result.err).toBeUndefined();
+    expect(result.err).toBeNull();
   });
 });
