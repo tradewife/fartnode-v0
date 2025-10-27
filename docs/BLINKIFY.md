@@ -1,10 +1,10 @@
-# Blinkify Devnet Demo
+# Institutional Blink Demo
 
-Fartnode's Blinkify UI consumes the devnet airdrop Action worker, simulates the
-transaction first, and lets a user sign/send from their wallet. The demo runs
-entirely against **Solana Devnet**.
+Fartnode's Blinkify UI consumes the institutional SOL transfer Action worker,
+simulates the transaction first, and lets a user sign/send from their wallet.
+The demo defaults to **Solana Devnet**, but any RPC can be supplied via env.
 
-> Devnet only — always simulate first before sending or sharing the Blink URL.
+> Always simulate first before sending or sharing the Blink URL.
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ entirely against **Solana Devnet**.
 ## Run the Worker + Web App
 
 ```bash
-# 1. Action worker with devnet credentials
+# 1. Action worker with institutional rails
 pnpm -C apps/action-worker dev
 
 # 2. Web UI (requires VITE_ACTION_WORKER_URL in apps/web/.env)
@@ -33,32 +33,33 @@ Then point `VITE_ACTION_WORKER_URL` to your running worker (default: `http://127
 
 ## Action Endpoints
 
-Metadata:
+Transfer metadata:
 
 ```bash
-curl "$VITE_ACTION_WORKER_URL/api/solana/actions/devnet-airdrop"
+curl "$VITE_ACTION_WORKER_URL/api/actions/transfer-sol"
 ```
 
 Compose (simulate-first):
 
 ```bash
-curl -X POST "$VITE_ACTION_WORKER_URL/api/solana/actions/devnet-airdrop" \
+curl -X POST "$VITE_ACTION_WORKER_URL/api/actions/transfer-sol" \
   -H "Content-Type: application/json" \
-  -d '{"publicKey":"<DEVNET_PUBLIC_KEY>","amountSol":1}'
+  -d '{"account":"<WALLET_PUBKEY>","recipient":"<RECIPIENT_PUBKEY>","amountSol":0.5}'
 ```
 
-Expect `{ transaction, message, simulateFirst, simulationLogs? }`. The Blink
-share surfaces the `POST` endpoint directly.
+Expect the Solana Actions `transaction` payload with institutional meta fields
+(`meta.priorityFeeMicrolamports`, `meta.blinkUrl`, etc.). The Blink share uses
+the `/actions/transfer-sol` URL defined in `actions.json`.
 
 ## UI Flow (Screenshots / GIFs)
 
-1. **Connect** Phantom/Solflare on devnet via the Wallet Adapter modal.
-2. **Fetch metadata** and adjust the optional amount (ignored by the placeholder).
+1. **Connect** Phantom/Solflare via the Wallet Adapter modal.
+2. **Fetch metadata** describing the transfer Action schema.
 3. **Compose** to fetch the base64 transaction + simulation logs.
-4. **Simulate-first** — review logs in the expandable panel.
-5. **Sign & send** — capture the signature and open it in Solana Explorer or
-   SolanaFM (devnet cluster).
-6. **Share** the Blink URL from the UI panel.
+4. **Review meta** — priority fee, compute units, blockhash, Blink URL.
+5. **Simulate-first** — inspect the log panel before sending.
+6. **Sign & send** — capture the signature and open it in Solana Explorer.
+7. **Share** the Blink URL surfaced in the compose result.
 
 Record screenshots or a GIF covering connect → POST → simulate logs → sign →
 signature links.
@@ -72,6 +73,6 @@ signature links.
 
 ## Notes
 
-- All requests use CORS (`Access-Control-Allow-Origin: *`), enabling cross-origin web demos.
-- The demo clamps amounts server-side to safe devnet values and logs simulation output before prompting for signatures.
-- For production, swap Devnet endpoints, restrict origins, and add analytics/observability as needed.
+- All requests use `ACTIONS_CORS_HEADERS`, enabling cross-origin web demos.
+- The worker enforces institutional rails: priority fee bounds, compute budget, blockhash validation, identity memo, and simulation-first responses.
+- For production, set mainnet RPC env vars, restrict origins, and plug observability/tip-guard rails as needed.

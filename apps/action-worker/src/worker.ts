@@ -1,140 +1,116 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
-import type { ComposeResult } from "@fartnode/solana-core";
+
+import { ACTIONS_CORS_HEADERS, getConnection } from "@fartnode/solana-core";
 
 import {
-  composeDevnetAirdrop,
-  getDevnetAirdropMetadata
-} from "./routes/solana/devnet-airdrop.js";
+  composeTransferSol,
+  getTransferSolMetadata
+} from "./routes/actions/transfer-sol.js";
+import { composeSwap, getSwapMetadata } from "./routes/actions/swap.js";
 
 type Bindings = {
+  SOLANA_RPC_PRIMARY?: string;
   SOLANA_RPC_URL?: string;
-  IDEMPOTENCY_KV?: KVNamespace;
+  SOLANA_RPC_FALLBACKS?: string;
+  SOLANA_COMMITMENT_READ?: string;
+  SOLANA_COMMITMENT_SEND?: string;
+  FARTNODE_ACTION_IDENTITY_MEMO?: string;
+  FARTNODE_ACTION_IDENTITY_PUBKEY?: string;
+  FARTNODE_JITO_URL?: string;
+  FARTNODE_JITO_ENABLED?: string;
+  JUPITER_BASE_URL?: string;
 };
 
 type WorkerContext = Context<{ Bindings: Bindings }>;
 
-const ACTION_ENDPOINTS = [
-  "/api/solana/devnet-airdrop",
-  "/api/solana/actions/devnet-airdrop"
-] as const;
-
-const IDEMPOTENCY_TTL = 60 * 60; // seconds
-const RATE_LIMIT_WINDOW_MS = 3_000;
-const rateLimitCache = new Map<string, number>();
-const memoryIdempotency = new Map<string, ComposeResult>();
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type,Idempotency-Key"
-} as const;
-
-const allowRequest = (identifier: string): boolean => {
-  const now = Date.now();
-  const last = rateLimitCache.get(identifier) ?? 0;
-
-  if (now - last < RATE_LIMIT_WINDOW_MS) {
-    return false;
-  }
-
-  rateLimitCache.set(identifier, now);
-  return true;
+const ACTION_RULES = {
+  rules: [
+    {
+      pathPattern: "/actions/transfer-sol",
+      apiPath: "/api/actions/transfer-sol"
+    },
+    {
+      pathPattern: "/actions/swap",
+      apiPath: "/api/actions/swap"
+    }
+  ]
 };
 
-const loadIdempotentResponse = async (
-  env: Bindings,
-  key: string
-): Promise<ComposeResult | null> => {
-  if (env.IDEMPOTENCY_KV) {
-    const stored = await env.IDEMPOTENCY_KV.get<ComposeResult>(key, {
-      type: "json"
-    });
-    return stored ?? null;
-  }
+type JsonStatus = 200 | 400 | 500;
 
-  return memoryIdempotency.get(key) ?? null;
-};
-
-const persistIdempotentResponse = async (
-  env: Bindings,
-  key: string,
-  value: ComposeResult
-): Promise<void> => {
-  if (env.IDEMPOTENCY_KV) {
-    await env.IDEMPOTENCY_KV.put(key, JSON.stringify(value), {
-      expirationTtl: IDEMPOTENCY_TTL
-    });
-    return;
-  }
-
-  memoryIdempotency.set(key, value);
-};
+const json = <T>(c: WorkerContext, data: T, status: JsonStatus = 200) =>
+  c.json(data, status, ACTIONS_CORS_HEADERS);
 
 const app = new Hono<{ Bindings: Bindings }>();
 
 app.onError((err, c) => {
   console.error("Unhandled worker error", err);
-  return c.json({ error: "Internal Server Error" }, 500, CORS_HEADERS);
+  return json(c as WorkerContext, { error: "Internal Server Error" }, 500);
 });
 
 app.use("*", async (c, next) => {
-  await next();
-  for (const [name, value] of Object.entries(CORS_HEADERS)) {
-    c.res.headers.set(name, value);
+  if (c.req.method === "OPTIONS") {
+    return c.body(null, 204, ACTIONS_CORS_HEADERS);
   }
+  return next();
 });
 
-const handleComposeRequest = async (c: WorkerContext) => {
-  const clientId = c.req.header("CF-Connecting-IP") ?? "anonymous";
-  if (!allowRequest(clientId)) {
-    return c.json({ error: "Rate limit exceeded" }, 429);
-  }
+app.get("/actions.json", (c) => json(c as WorkerContext, ACTION_RULES));
 
-  const idempotencyKey = c.req.header("Idempotency-Key") ?? undefined;
-  if (idempotencyKey) {
-    const cached = await loadIdempotentResponse(c.env, idempotencyKey);
-    if (cached) {
-      return c.json(cached);
-    }
-  }
-
-  let payload: unknown;
-  try {
-    payload = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-
-  if (typeof payload !== "object" || payload === null) {
-    return c.json({ error: "Request body must be an object" }, 400);
-  }
-
-  try {
-    const result = await composeDevnetAirdrop({
-      rpcUrl: c.env.SOLANA_RPC_URL,
-      input: payload as any
-    });
-
-    if (idempotencyKey) {
-      await persistIdempotentResponse(c.env, idempotencyKey, result);
-    }
-
-    return c.json(result);
-  } catch (error) {
-    console.warn("Devnet airdrop composition failed", error);
-    return c.json({ error: (error as Error).message ?? "Unknown error" }, 400);
-  }
+type ActionHandler = {
+  path: string;
+  get: (origin: string) => unknown;
+  post: (params: { body: unknown; connection: Awaited<ReturnType<typeof getConnection>>; origin: string }) => Promise<unknown>;
 };
 
-const handleMetadataRequest = (c: WorkerContext) => {
-  return c.json(getDevnetAirdropMetadata());
+const actionHandlers: ActionHandler[] = [
+  {
+    path: "/api/actions/transfer-sol",
+    get: getTransferSolMetadata,
+    post: composeTransferSol as ActionHandler["post"]
+  },
+  {
+    path: "/api/actions/swap",
+    get: getSwapMetadata,
+    post: composeSwap as ActionHandler["post"]
+  }
+];
+
+const getOrigin = (url: string): string => {
+  const parsed = new URL(url);
+  return parsed.origin;
 };
 
-for (const path of ACTION_ENDPOINTS) {
-  app.options(path, (c) => c.body(null, 204, CORS_HEADERS));
-  app.get(path, handleMetadataRequest);
-  app.post(path, handleComposeRequest);
+for (const { path, get, post } of actionHandlers) {
+  app.get(path, async (c) => {
+    try {
+      const origin = getOrigin(c.req.url);
+      return json(c as WorkerContext, get(origin));
+    } catch (error) {
+      console.warn(`Metadata handler failed for ${path}`, error);
+      return json(c as WorkerContext, { error: "Unable to build metadata" }, 500);
+    }
+  });
+
+  app.post(path, async (c) => {
+    try {
+      const origin = getOrigin(c.req.url);
+      const body = await c.req.json();
+      const connection = await getConnection(undefined, undefined, "send");
+      const payload = await post({
+        body,
+        connection,
+        origin
+      });
+      return json(c as WorkerContext, payload);
+    } catch (error) {
+      console.warn(`Action handler failed for ${path}`, error);
+      const message =
+        error instanceof Error && error.message ? error.message : "Unable to compose transaction";
+      return json(c as WorkerContext, { error: message }, 400);
+    }
+  });
 }
 
 export default app;

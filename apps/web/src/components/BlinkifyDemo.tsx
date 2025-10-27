@@ -2,18 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { VersionedTransaction } from "@solana/web3.js";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import type { ActionGetResponse } from "@solana/actions";
 
 import {
-  getDevnetAirdropEndpoint,
-  getDevnetAirdropMetadata,
-  requestDevnetAirdrop,
-  type ActionMetadata,
-  type DevnetAirdropResponse
+  composeTransferAction,
+  getTransferActionEndpoint,
+  getTransferActionMetadata,
+  type TransferComposeResponse
 } from "../lib/actionsClient";
 import { SimulateLogs } from "./SimulateLogs";
-
-const ACTION_POST_COPY =
-  "Share this endpoint with Blink surfaces. It composes a Devnet airdrop transaction.";
 
 const decodeTransaction = (serialized: string): VersionedTransaction => {
   const atobImpl = globalThis.atob;
@@ -24,27 +21,33 @@ const decodeTransaction = (serialized: string): VersionedTransaction => {
   return VersionedTransaction.deserialize(bytes);
 };
 
-const explorerLink = (signature: string, network: string): string =>
-  `https://explorer.solana.com/tx/${signature}?cluster=${encodeURIComponent(network)}`;
-
-const solanaFmLink = (signature: string, network: string): string =>
-  `https://solana.fm/tx/${signature}?cluster=${encodeURIComponent(`${network}-solana`)}`;
+const ExplorerLink = ({ signature, network }: { signature: string; network: string }) => {
+  const explorer = `https://explorer.solana.com/tx/${signature}?cluster=${encodeURIComponent(network)}`;
+  return (
+    <a href={explorer} target="_blank" rel="noreferrer" style={{ color: "#6366f1" }}>
+      View on Solana Explorer
+    </a>
+  );
+};
 
 export const BlinkifyDemo = (): JSX.Element => {
   const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
 
-  const [metadata, setMetadata] = useState<ActionMetadata | null>(null);
+  const [metadata, setMetadata] = useState<ActionGetResponse | null>(null);
   const [metadataLoading, setMetadataLoading] = useState(false);
   const [metadataError, setMetadataError] = useState<string | null>(null);
 
-  const [amountSol, setAmountSol] = useState("1");
-  const [isComposing, setIsComposing] = useState(false);
+  const [recipient, setRecipient] = useState("");
+  const [amountSol, setAmountSol] = useState("0.5");
+  const [memo, setMemo] = useState("");
+
+  const [composePending, setComposePending] = useState(false);
   const [composeError, setComposeError] = useState<string | null>(null);
-  const [composeResponse, setComposeResponse] = useState<DevnetAirdropResponse | null>(null);
+  const [composeResponse, setComposeResponse] = useState<TransferComposeResponse | null>(null);
   const [transactionBase64, setTransactionBase64] = useState<string | null>(null);
 
-  const [isSending, setIsSending] = useState(false);
+  const [sendPending, setSendPending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
 
@@ -55,9 +58,10 @@ export const BlinkifyDemo = (): JSX.Element => {
     setMetadataLoading(true);
     setMetadataError(null);
     try {
-      const result = await getDevnetAirdropMetadata();
+      const result = await getTransferActionMetadata();
       setMetadata(result);
     } catch (error) {
+      setMetadata(null);
       setMetadataError((error as Error).message);
     } finally {
       setMetadataLoading(false);
@@ -67,13 +71,13 @@ export const BlinkifyDemo = (): JSX.Element => {
   useEffect(() => {
     void loadMetadata();
     try {
-      setActionEndpoint(getDevnetAirdropEndpoint());
+      setActionEndpoint(getTransferActionEndpoint());
     } catch (error) {
       setEndpointError((error as Error).message);
     }
   }, [loadMetadata]);
 
-  const handleCompose = useCallback(async () => {
+  const compose = useCallback(async () => {
     if (!publicKey) {
       setComposeError("Connect a wallet before composing.");
       return;
@@ -82,21 +86,16 @@ export const BlinkifyDemo = (): JSX.Element => {
     setComposeError(null);
     setSendError(null);
     setSignature(null);
-    setIsComposing(true);
+    setComposePending(true);
 
     try {
-      let parsedAmount: number | undefined;
-      if (amountSol.trim() !== "") {
-        const numeric = Number(amountSol);
-        if (!Number.isNaN(numeric)) {
-          parsedAmount = numeric;
-        }
-      }
-      const result = await requestDevnetAirdrop({
-        publicKey: publicKey.toBase58(),
-        amountSol: parsedAmount
-      });
-
+      const payload = {
+        account: publicKey.toBase58(),
+        recipient: recipient.trim(),
+        amountSol: Number(amountSol),
+        memo: memo.trim() || undefined
+      };
+      const result = await composeTransferAction(payload);
       setComposeResponse(result);
       setTransactionBase64(result.transaction);
     } catch (error) {
@@ -104,23 +103,22 @@ export const BlinkifyDemo = (): JSX.Element => {
       setTransactionBase64(null);
       setComposeError((error as Error).message);
     } finally {
-      setIsComposing(false);
+      setComposePending(false);
     }
-  }, [amountSol, publicKey]);
+  }, [amountSol, memo, publicKey, recipient]);
 
-  const handleSend = useCallback(async () => {
+  const send = useCallback(async () => {
     if (!publicKey) {
       setSendError("Connect a wallet before sending.");
       return;
     }
-
     if (!transactionBase64) {
       setSendError("Compose a transaction first.");
       return;
     }
 
     setSendError(null);
-    setIsSending(true);
+    setSendPending(true);
 
     try {
       const versioned = decodeTransaction(transactionBase64);
@@ -130,24 +128,21 @@ export const BlinkifyDemo = (): JSX.Element => {
       setSignature(null);
       setSendError((error as Error).message);
     } finally {
-      setIsSending(false);
+      setSendPending(false);
     }
   }, [connection, publicKey, sendTransaction, transactionBase64]);
 
-  const disableCompose = !publicKey || isComposing;
-  const disableSend = !publicKey || !transactionBase64 || isSending;
+  const disableCompose = !publicKey || composePending;
+  const disableSend = !publicKey || !transactionBase64 || sendPending;
 
-  const signatureLinks = useMemo(() => {
-    if (!signature || !composeResponse) {
-      return null;
+  const meta = composeResponse?.meta as Record<string, unknown> | undefined;
+
+  const network = useMemo(() => {
+    if (!meta?.network) {
+      return "confirmed";
     }
-
-    const { network } = composeResponse;
-    return {
-      explorer: explorerLink(signature, network),
-      solanaFm: solanaFmLink(signature, network)
-    };
-  }, [composeResponse, signature]);
+    return String(meta.network);
+  }, [meta]);
 
   return (
     <section
@@ -169,17 +164,16 @@ export const BlinkifyDemo = (): JSX.Element => {
         }}
       >
         <div>
-          <h2 style={{ margin: 0 }}>Blinkify the Devnet Airdrop</h2>
+          <h2 style={{ margin: 0 }}>Institutional SOL Transfer (Blink)</h2>
           <p style={{ margin: 0, color: "#64748b" }}>
-            Connect Phantom or Solflare on devnet, compose, simulate, then send.
+            Estimate fees, build compute budget, simulate, then hand off to your wallet.
           </p>
         </div>
         <WalletMultiButton style={{ background: "#6366f1" }} />
       </div>
 
-      <div style={{ marginBottom: "1.5rem" }}>
-        <strong>Wallet:</strong>{" "}
-        {publicKey ? publicKey.toBase58() : "Not connected"}
+      <div style={{ marginBottom: "1.25rem" }}>
+        <strong>Wallet:</strong> {publicKey ? publicKey.toBase58() : "Not connected"}
       </div>
 
       <div style={{ marginBottom: "1.5rem" }}>
@@ -198,142 +192,147 @@ export const BlinkifyDemo = (): JSX.Element => {
           {metadataLoading ? "Refreshing metadata..." : "Refresh metadata"}
         </button>
         {metadataError ? (
-          <p style={{ color: "#dc2626", marginTop: "0.75rem" }}>{metadataError}</p>
-        ) : null}
-        {metadata ? (
-          <div style={{ marginTop: "1rem" }}>
-            <h3 style={{ marginBottom: "0.5rem" }}>{metadata.title}</h3>
-            <p style={{ marginTop: 0, color: "#475569" }}>{metadata.description}</p>
-            <ul style={{ paddingLeft: "1.25rem", margin: 0 }}>
-              {metadata.inputs.map((input) => (
-                <li key={input.name}>
-                  <code>{input.name}</code> ({input.type})
-                  {input.required ? " • required" : " • optional"}
-                </li>
-              ))}
-            </ul>
-          </div>
+          <span style={{ marginLeft: "0.75rem", color: "#dc2626" }}>{metadataError}</span>
+        ) : metadata ? (
+          <span style={{ marginLeft: "0.75rem", color: "#0f172a" }}>
+            {metadata.title} — {metadata.description}
+          </span>
         ) : null}
       </div>
 
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void handleCompose();
-        }}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "1rem",
-          marginBottom: "1.5rem"
-        }}
-      >
+      <div style={{ display: "grid", gap: "0.85rem", marginBottom: "1.5rem" }}>
         <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-          <span style={{ fontWeight: 600 }}>
-            Amount (SOL) — optional, worker clamps to devnet safe values
-          </span>
+          <span>Recipient address</span>
           <input
-            type="number"
-            inputMode="decimal"
-            step="0.1"
-            min="0"
-            value={amountSol}
-            onChange={(event) => setAmountSol(event.target.value)}
-            style={{
-              padding: "0.75rem",
-              borderRadius: "0.5rem",
-              border: "1px solid rgba(148, 163, 184, 0.8)",
-              fontSize: "1rem"
-            }}
+            value={recipient}
+            onChange={(event) => setRecipient(event.target.value)}
+            placeholder="Enter recipient"
+            style={{ padding: "0.6rem", borderRadius: "0.5rem", border: "1px solid #cbd5f5" }}
           />
         </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+          <span>Amount (SOL)</span>
+          <input
+            value={amountSol}
+            onChange={(event) => setAmountSol(event.target.value)}
+            placeholder="1.0"
+            type="number"
+            min="0"
+            step="0.0001"
+            style={{ padding: "0.6rem", borderRadius: "0.5rem", border: "1px solid #cbd5f5" }}
+          />
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+          <span>Memo (optional)</span>
+          <input
+            value={memo}
+            onChange={(event) => setMemo(event.target.value)}
+            placeholder="Institutional memo"
+            style={{ padding: "0.6rem", borderRadius: "0.5rem", border: "1px solid #cbd5f5" }}
+          />
+        </label>
+      </div>
 
+      <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.5rem" }}>
         <button
-          type="submit"
+          type="button"
+          onClick={() => void compose()}
           disabled={disableCompose}
           style={{
-            padding: "0.85rem 1rem",
-            borderRadius: "0.75rem",
+            padding: "0.65rem 1.2rem",
+            borderRadius: "0.5rem",
             border: "none",
-            fontSize: "1rem",
-            fontWeight: 600,
-            background: disableCompose ? "rgba(148,163,184,0.6)" : "#6366f1",
-            color: "#ffffff"
+            background: disableCompose ? "rgba(99,102,241,0.25)" : "#6366f1",
+            color: "white",
+            fontWeight: 600
           }}
         >
-          {isComposing ? "Composing..." : "Compose Devnet transaction"}
+          {composePending ? "Composing..." : "Compose Action"}
         </button>
-      </form>
+        <button
+          type="button"
+          onClick={() => void send()}
+          disabled={disableSend}
+          style={{
+            padding: "0.65rem 1.2rem",
+            borderRadius: "0.5rem",
+            border: "1px solid rgba(15,23,42,0.15)",
+            background: disableSend ? "rgba(15,23,42,0.05)" : "white",
+            color: "#0f172a",
+            fontWeight: 600
+          }}
+        >
+          {sendPending ? "Sending..." : "Send via Wallet"}
+        </button>
+      </div>
 
       {composeError ? <p style={{ color: "#dc2626" }}>{composeError}</p> : null}
+      {sendError ? <p style={{ color: "#dc2626" }}>{sendError}</p> : null}
 
-      {composeResponse ? (
-        <div style={{ marginBottom: "1.5rem" }}>
-          <p style={{ marginTop: 0, color: "#475569" }}>{composeResponse.message}</p>
-          {composeResponse.simulateFirst ? (
-            <p style={{ marginTop: "0.5rem", color: "#0ea5e9" }}>
-              Simulation recommended — review the logs below before sending.
-            </p>
+      {composeResponse && (
+        <div
+          style={{
+            border: "1px solid rgba(15,23,42,0.12)",
+            borderRadius: "0.75rem",
+            padding: "1.25rem",
+            background: "rgba(241,245,249,0.45)",
+            marginBottom: "1.5rem"
+          }}
+        >
+          <h3 style={{ marginTop: 0 }}>Compose Result</h3>
+          <ul style={{ listStyle: "disc", marginLeft: "1.5rem", color: "#0f172a" }}>
+            <li>
+              <strong>simulateFirst:</strong> {composeResponse.simulateFirst ? "true" : "false"}
+            </li>
+            {meta?.priorityFeeMicrolamports ? (
+              <li>
+                <strong>Priority fee:</strong> {String(meta.priorityFeeMicrolamports)} μ-lamports/CU
+              </li>
+            ) : null}
+            {meta?.computeUnitLimit ? (
+              <li>
+                <strong>Compute limit:</strong> {String(meta.computeUnitLimit)} units
+              </li>
+            ) : null}
+            {meta?.blockhash && meta?.lastValidBlockHeight ? (
+              <li>
+                <strong>Blockhash:</strong> {String(meta.blockhash)} (valid through height {String(meta.lastValidBlockHeight)})
+              </li>
+            ) : null}
+            {meta?.blinkUrl ? (
+              <li>
+                <strong>Blink URL:</strong>{" "}
+                <a href={String(meta.blinkUrl)} target="_blank" rel="noreferrer">
+                  {String(meta.blinkUrl)}
+                </a>
+              </li>
+            ) : null}
+          </ul>
+
+          {composeResponse.simulationLogs && composeResponse.simulationLogs.length > 0 ? (
+            <SimulateLogs logs={composeResponse.simulationLogs} />
           ) : null}
-          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={() => void handleSend()}
-              disabled={disableSend}
-              style={{
-                padding: "0.75rem 1rem",
-                borderRadius: "0.75rem",
-                border: "none",
-                fontWeight: 600,
-                background: disableSend ? "rgba(148,163,184,0.6)" : "#0ea5e9",
-                color: "#0f172a"
-              }}
-            >
-              {isSending ? "Sending..." : "Sign and send"}
-            </button>
-          </div>
-          {sendError ? <p style={{ color: "#dc2626" }}>{sendError}</p> : null}
         </div>
-      ) : null}
+      )}
 
-      {signatureLinks ? (
-        <div style={{ marginBottom: "1.5rem" }}>
-          <h3 style={{ marginBottom: "0.25rem" }}>Transaction signature</h3>
-          <p style={{ marginTop: 0 }}>
-            <a href={signatureLinks.explorer} target="_blank" rel="noreferrer">
-              View on Solana Explorer
-            </a>{" "}
-            ·{" "}
-            <a href={signatureLinks.solanaFm} target="_blank" rel="noreferrer">
-              View on SolanaFM
-            </a>
-          </p>
-        </div>
-      ) : null}
+      {signature && <ExplorerLink signature={signature} network={network} />}
 
-      <SimulateLogs logs={composeResponse?.simulationLogs} />
-
-      <section
-        style={{
-          marginTop: "1.5rem",
-          padding: "1rem",
-          borderRadius: "0.75rem",
-          border: "1px dashed rgba(99,102,241,0.45)",
-          background: "rgba(99,102,241,0.08)"
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>Blink share URL</h3>
+      <div style={{ marginTop: "2rem" }}>
+        <h3>Action endpoint</h3>
         {endpointError ? (
           <p style={{ color: "#dc2626" }}>{endpointError}</p>
-        ) : (
-          <>
-            <code style={{ display: "block", marginBottom: "0.75rem" }}>
-              {actionEndpoint}
-            </code>
-            <p style={{ margin: 0, color: "#475569" }}>{ACTION_POST_COPY}</p>
-          </>
-        )}
-      </section>
+        ) : actionEndpoint ? (
+          <code style={{
+            display: "block",
+            padding: "0.75rem",
+            borderRadius: "0.5rem",
+            background: "rgba(15,23,42,0.05)",
+            color: "#0f172a"
+          }}>
+            {actionEndpoint}
+          </code>
+        ) : null}
+      </div>
     </section>
   );
 };

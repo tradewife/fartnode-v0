@@ -1,120 +1,103 @@
-export type ActionInputField = {
-  name: string;
-  type: string;
-  required: boolean;
-  default?: unknown;
-};
-
-export type ActionMetadata = {
-  title: string;
-  description: string;
-  inputs: ActionInputField[];
-};
-
-export type DevnetAirdropRequest = {
-  publicKey: string;
-  amountSol?: number;
-};
-
-export type DevnetAirdropResponse = {
-  transaction: string;
-  message?: string;
-  network: string;
-  simulateFirst: boolean;
-  simulationLogs?: string[];
-};
+import type { ActionGetResponse, ActionPostResponse } from "@solana/actions";
 
 type FetchLike = typeof fetch;
 
-const ACTION_PATH = "/api/solana/actions/devnet-airdrop";
+const TRANSFER_PATH = "/api/actions/transfer-sol";
+const SWAP_PATH = "/api/actions/swap";
+
+export type TransferComposeResponse = ActionPostResponse & {
+  type: "transaction";
+  transaction: string;
+  simulateFirst?: boolean;
+  simulationLogs?: string[];
+  meta?: Record<string, unknown>;
+};
+
+export type SwapComposeResponse = TransferComposeResponse;
 
 const normalizeBaseUrl = (url: string): string => url.replace(/\/+$/, "");
+
+const parseJson = async <T>(response: Response): Promise<T> => {
+  if (!response.ok) {
+    const raw = await response.text();
+    throw new Error(raw || `Request failed with status ${response.status}`);
+  }
+  return (await response.json()) as T;
+};
 
 export const createActionsClient = (
   baseUrl: string | undefined = import.meta.env.VITE_ACTION_WORKER_URL,
   fetchImpl: FetchLike = fetch
 ) => {
   const resolveBaseUrl = (): string => {
-    const resolved = baseUrl;
-    if (!resolved) {
+    if (!baseUrl) {
       throw new Error("VITE_ACTION_WORKER_URL is not configured");
     }
     try {
-      const parsed = new URL(resolved);
+      const parsed = new URL(baseUrl);
       return normalizeBaseUrl(parsed.toString());
     } catch {
       throw new Error("VITE_ACTION_WORKER_URL must be a valid URL");
     }
   };
 
-  const getEndpoint = (): string => `${resolveBaseUrl()}${ACTION_PATH}`;
-
-  const getMetadata = async (): Promise<ActionMetadata> => {
-    const response = await fetchImpl(getEndpoint(), {
-      method: "GET",
-      headers: { Accept: "application/json" }
+  const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
+    const url = `${resolveBaseUrl()}${path}`;
+    const response = await fetchImpl(url, {
+      ...init,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {})
+      }
     });
-
-    if (!response.ok) {
-      throw new Error(`Unable to load action metadata (${response.status})`);
-    }
-
-    return (await response.json()) as ActionMetadata;
+    return parseJson<T>(response);
   };
 
-  const composeTransaction = async (
-    payload: DevnetAirdropRequest
-  ): Promise<DevnetAirdropResponse> => {
-    if (!payload.publicKey) {
-      throw new Error("publicKey is required");
-    }
+  const getTransferMetadata = (): Promise<ActionGetResponse> =>
+    request<ActionGetResponse>(TRANSFER_PATH, { method: "GET" });
 
-    const response = await fetchImpl(getEndpoint(), {
+  const composeTransfer = (payload: Record<string, unknown>): Promise<TransferComposeResponse> =>
+    request<TransferComposeResponse>(TRANSFER_PATH, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(payload)
     });
 
-    if (!response.ok) {
-      const contentType = response.headers.get("Content-Type") ?? "";
-      let message = `Action worker returned ${response.status}`;
+  const getSwapMetadata = (): Promise<ActionGetResponse> =>
+    request<ActionGetResponse>(SWAP_PATH, { method: "GET" });
 
-      const rawBody = await response.text();
-      if (rawBody) {
-        if (contentType.includes("application/json")) {
-          try {
-            const parsed = JSON.parse(rawBody) as { error?: unknown };
-            if (parsed?.error && typeof parsed.error === "string") {
-              message = parsed.error;
-            }
-          } catch {
-            message = rawBody;
-          }
-        } else {
-          message = rawBody;
-        }
-      }
-
-      throw new Error(message);
-    }
-
-    return (await response.json()) as DevnetAirdropResponse;
-  };
+  const composeSwap = (payload: Record<string, unknown>): Promise<SwapComposeResponse> =>
+    request<SwapComposeResponse>(SWAP_PATH, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
 
   return {
-    getEndpoint,
-    getMetadata,
-    composeTransaction
+    getTransferMetadata,
+    composeTransfer,
+    getSwapMetadata,
+    composeSwap,
+    getTransferEndpoint: (): string => `${resolveBaseUrl()}${TRANSFER_PATH}`,
+    getSwapEndpoint: (): string => `${resolveBaseUrl()}${SWAP_PATH}`
   };
 };
 
 const defaultClient = createActionsClient();
 
-export const getDevnetAirdropMetadata = (): Promise<ActionMetadata> =>
-  defaultClient.getMetadata();
+export const getTransferActionMetadata = (): Promise<ActionGetResponse> =>
+  defaultClient.getTransferMetadata();
 
-export const requestDevnetAirdrop = (
-  payload: DevnetAirdropRequest
-): Promise<DevnetAirdropResponse> => defaultClient.composeTransaction(payload);
+export const composeTransferAction = (
+  payload: Record<string, unknown>
+): Promise<TransferComposeResponse> => defaultClient.composeTransfer(payload);
 
-export const getDevnetAirdropEndpoint = (): string => defaultClient.getEndpoint();
+export const getTransferActionEndpoint = (): string => defaultClient.getTransferEndpoint();
+
+export const getSwapActionMetadata = (): Promise<ActionGetResponse> =>
+  defaultClient.getSwapMetadata();
+
+export const composeSwapAction = (
+  payload: Record<string, unknown>
+): Promise<SwapComposeResponse> => defaultClient.composeSwap(payload);
+
+export const getSwapActionEndpoint = (): string => defaultClient.getSwapEndpoint();
