@@ -39,6 +39,12 @@ export const RECIPES: Record<string, BuildRecipe> = {
     title: "Devnet Airdrop",
     subtitle: "Server-side example",
     kind: "server-composer"
+  },
+  transferAction: {
+    id: "transferAction",
+    title: "Transfer (Action)",
+    subtitle: "Server-composed, wallet-signed",
+    kind: "server-composer"
   }
 };
 
@@ -76,6 +82,16 @@ export const makePlan = (vibe: string, recipe: BuildRecipe): BuildPlan => {
         vibeSummary,
         "Devnet server composer (airdrop example)",
         "Simulate-first then sign Memo/No-op"
+      ]
+    },
+    transferAction: {
+      kind: "server-composer",
+      endpoint: `${baseUrl}/api/solana/actions/devnet-transfer`,
+      steps: [
+        vibeSummary,
+        "Server-composed transfer with compute/priority",
+        "Simulate-first logs returned",
+        "Sign in wallet and share Blink"
       ]
     }
   };
